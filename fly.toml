@@ -1,0 +1,56 @@
+# Kaleidoscope on Fly.io
+# Provision once with: fly launch --no-deploy --copy-config
+# Then attach Managed Postgres and set secrets:
+#   fly mpg create && fly mpg attach <cluster>     # sets DATABASE_URL
+#   fly secrets set GOOGLE_API_KEY=...
+#   fly deploy
+#
+# Optional: when adding more / larger source clips, create a persistent volume
+# and mount it at /data/clips (uncomment the [mounts] block below):
+#   fly volumes create clips --region sin --size 5
+
+app = "kaleidoscope"
+primary_region = "sin"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  NEXT_TELEMETRY_DISABLED = "1"
+  PORT = "3000"
+  # v1 reads bundled clips from the image. Switch to "/data/clips" once the
+  # mount below is enabled.
+  CLIPS_DIR = "public/clips"
+
+# Uncomment when you want clips on a persistent volume instead of in the image.
+# [[mounts]]
+#   source = "clips"
+#   destination = "/data/clips"
+#   initial_size = "5gb"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 200
+    hard_limit = 400
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1
