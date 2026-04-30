@@ -165,4 +165,72 @@ export const SCENARIOS: ScenarioDef[] = [
     promptAddendum:
       "Track every pedestrian within 6m. Predict whether they will pass left, pass right, or stop within the next 2s.",
   },
+  {
+    id: "stockholm_subway",
+    title: "Stockholm Descent",
+    category: "cctv",
+    description:
+      "Stockholm subway escalator and platform interior. Indoor low-light scene with constrained geometry — tests perception under columns, signage, and reflective tile.",
+    videoUrl: "/clips/stockholm_subway.mp4",
+    fps: 1,
+    width: 1280,
+    height: 720,
+    durationSec: 15,
+    hfovDeg: 60,
+    cameraHeightM: 2.2,
+    cameraPitchDeg: 0,
+    promptAddendum:
+      "Identify pedestrians by motion class: descending, ascending, waiting. Flag any moving against the crowd direction.",
+  },
+  {
+    id: "sweden_train_pov",
+    title: "Heby Line",
+    category: "driving",
+    description:
+      "Forward POV from a Swedish regional train cab between Heby and Morgongåva. Linear-rail motion through farmland — tests trajectory prediction along constrained geometry.",
+    videoUrl: "/clips/sweden_train_pov.mp4",
+    fps: 1,
+    width: 1280,
+    height: 720,
+    durationSec: 15,
+    hfovDeg: 65,
+    cameraHeightM: 3,
+    cameraPitchDeg: 0,
+    promptAddendum:
+      "Track external agents only (vehicles at level crossings, animals, people near the track). Ignore platform shadow.",
+  },
+  {
+    id: "manhattan_drone",
+    title: "Midtown Flyover",
+    category: "cctv",
+    description:
+      "Drone glide over Midtown Manhattan rooftops at altitude. Vehicles read as pixel agents at a few meters wide — stress-tests small-object tracking at long range.",
+    videoUrl: "/clips/manhattan_drone.mp4",
+    fps: 2,
+    width: 1280,
+    height: 720,
+    durationSec: 15,
+    hfovDeg: 70,
+    cameraHeightM: 200,
+    cameraPitchDeg: 50,
+    promptAddendum:
+      "Treat each vehicle as a small agent. Drop confidence below 0.5 if the agent is shorter than 8 pixels.",
+  },
+  {
+    id: "akureyri_drone",
+    title: "Akureyri Approach",
+    category: "cctv",
+    description:
+      "Drone approach over Akureyri, Iceland's northern capital — small-city aerial with sparse traffic, fjord coastline, and harbour cranes. Contrast to dense-city aerials.",
+    videoUrl: "/clips/akureyri_drone.mp4",
+    fps: 2,
+    width: 1280,
+    height: 720,
+    durationSec: 15,
+    hfovDeg: 75,
+    cameraHeightM: 80,
+    cameraPitchDeg: 35,
+    promptAddendum:
+      "Distinguish moored vessels (intent='stationary') from active boats. Ignore ground-level cars at this altitude unless on a main road.",
+  },
 ];

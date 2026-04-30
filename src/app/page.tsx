@@ -144,7 +144,7 @@ export default async function Home() {
                   <span>SEC. 02 — FEED LIBRARY</span>
                 </div>
                 <h2 className="mt-4 font-display text-3xl italic leading-[1.05] text-foreground md:text-5xl">
-                  Eight feeds. One vector space.
+                  {numberWord(feeds.length)} feeds. One vector space.
                 </h2>
               </div>
               <p className="max-w-sm text-[11px] uppercase tracking-[0.2em] text-fg-mute">
@@ -307,4 +307,28 @@ function Spec({
 
 function pad(n: number) {
   return n.toString().padStart(2, "0");
+}
+
+const NUMBER_WORDS = [
+  "Zero",
+  "One",
+  "Two",
+  "Three",
+  "Four",
+  "Five",
+  "Six",
+  "Seven",
+  "Eight",
+  "Nine",
+  "Ten",
+  "Eleven",
+  "Twelve",
+  "Thirteen",
+  "Fourteen",
+  "Fifteen",
+  "Sixteen",
+];
+
+function numberWord(n: number): string {
+  return NUMBER_WORDS[n] ?? n.toString();
 }
