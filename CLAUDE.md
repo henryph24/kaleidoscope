@@ -10,12 +10,12 @@ This file is for working in the codebase. The README is for humans. AGENTS.md fl
 
 ## Quick orientation
 
-- **Live URL**: https://kaleidoscope-hpq.fly.dev/
-- **Fly app**: `kaleidoscope-hpq` (`personal` org, `sin` region, 2× shared-cpu-1x machines, scales to zero)
+- **Live URL**: https://kscope.fly.dev/
+- **Fly app**: `kscope` (`personal` org, `sin` region, 2× shared-cpu-1x machines, scales to zero)
 - **Fly Postgres**: `kaleidoscope-db` (legacy unmanaged — `fly mpg` returned 500s during initial provision; legacy `fly postgres` worked)
 - **Repo**: `henryph24/kaleidoscope` on GitHub, default branch `main`
 
-When the user says "deploy" they almost always mean `fly deploy -a kaleidoscope-hpq --remote-only`. Both DATABASE_URL and GOOGLE_API_KEY are already staged as Fly secrets.
+When the user says "deploy" they almost always mean `fly deploy -a kscope --remote-only`. Both DATABASE_URL and GOOGLE_API_KEY are already staged as Fly secrets.
 
 ---
 
@@ -77,7 +77,7 @@ tests/
 └ accuracy.test.ts               predicted-vs-observed scoring
 
 public/clips/                    three .mp4s baked into Docker image (~19 MB total)
-fly.toml                         Fly app config (kaleidoscope-hpq, sin)
+fly.toml                         Fly app config (kscope, sin)
 Dockerfile                       Node 24 alpine, standalone Next.js output
 ```
 
@@ -98,7 +98,7 @@ Dockerfile                       Node 24 alpine, standalone Next.js output
 | Validation | zod 4.3.6 | Optional fields use `.nullish()` (Gemini omits, doesn't null). |
 | ORM | drizzle-orm 0.45.2 + drizzle-kit 0.31.10 | postgres-js driver. |
 | Tests | vitest 4.1.5 | Node env, alias `@/` → `src/`. |
-| Hosting | Fly.io | `kaleidoscope-hpq` app, legacy `fly postgres` (NOT `fly mpg`). |
+| Hosting | Fly.io | `kscope` app, legacy `fly postgres` (NOT `fly mpg`). |
 | Compute (optional) | Modal | Two pipelines, only `modal/pipeline.py` is exercised; `modal/gemma_pipeline.py` is scaffolded. |
 
 ---
@@ -175,9 +175,9 @@ npm run build                      # production build
 npm run start
 
 # Fly
-fly status -a kaleidoscope-hpq
-fly logs -a kaleidoscope-hpq
-fly deploy -a kaleidoscope-hpq --remote-only
+fly status -a kscope
+fly logs -a kscope
+fly deploy -a kscope --remote-only
 fly proxy 15432:5432 -a kaleidoscope-db   # for local migrations against prod DB
 ```
 
@@ -244,9 +244,9 @@ The DB password is in `fly secrets` and the original `fly postgres create` outpu
 
 ## When the user asks for "X" — what they likely mean
 
-- **"deploy"** → `fly deploy -a kaleidoscope-hpq --remote-only`. They don't want a redeploy of unrelated dependencies; commit code first.
+- **"deploy"** → `fly deploy -a kscope --remote-only`. They don't want a redeploy of unrelated dependencies; commit code first.
 - **"bake"** → re-run `prebake/bake.ts --live`. Confirm `DATABASE_URL` is the prod proxy URL or the local Postgres before running.
 - **"check budget"** → query `budget_ledger` table or read `.budget-ledger.json` depending on env.
 - **"add a scenario"** → append to `SCENARIOS` in `prebake/scenarios.ts`, drop the .mp4 in `public/clips/`, run `npm run bake -- --live --only=<new_id>`.
 - **"swap models"** → `GEMINI_MODEL=<id>` env var. Add the model to `PRICING_PER_M_TOKENS` in both TS and Python if it's a new tier.
-- **"check the live site"** → `curl -I https://kaleidoscope-hpq.fly.dev/` first, then `fly logs -a kaleidoscope-hpq` if anything looks off.
+- **"check the live site"** → `curl -I https://kscope.fly.dev/` first, then `fly logs -a kscope` if anything looks off.
