@@ -1,15 +1,25 @@
 @import "tailwindcss";
 
 :root {
-  --background: #050608;
-  --foreground: #e2e8f0;
+  --background: #0a0908;
+  --foreground: #f4ede4;
+  --bg-elev: #14110f;
+  --fg-mute: #6b6258;
+  --rule: #2a2620;
+  --accent: #ff5b1f;
+  --tally: #ff2e2e;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-fg-mute: var(--fg-mute);
+  --color-rule: var(--rule);
+  --color-accent: var(--accent);
+  --color-tally: var(--tally);
+  --font-sans: var(--font-mono-feed);
+  --font-mono: var(--font-mono-feed);
+  --font-display: var(--font-display-serif);
 }
 
 html,
@@ -17,11 +27,18 @@ body {
   height: 100%;
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-mono-feed), ui-monospace, SFMono-Regular, monospace;
   font-feature-settings: "ss01", "cv11";
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* range input thumb tweaks */
+::selection {
+  background: var(--accent);
+  color: var(--background);
+}
+
+/* range input thumb tweaks (scene page) */
 input[type="range"] {
   -webkit-appearance: none;
   appearance: none;
@@ -32,7 +49,7 @@ input[type="range"]::-webkit-slider-thumb {
   width: 14px;
   height: 14px;
   border-radius: 9999px;
-  background: #67e8f9;
+  background: var(--accent);
   border: 2px solid #0a0a0a;
   cursor: pointer;
 }
@@ -40,15 +57,141 @@ input[type="range"]::-moz-range-thumb {
   width: 14px;
   height: 14px;
   border-radius: 9999px;
-  background: #67e8f9;
+  background: var(--accent);
   border: 2px solid #0a0a0a;
   cursor: pointer;
 }
 
-/* Subtle grid background for the landing page */
+/* Subtle grid background — kept for compatibility with any legacy use */
 .bg-vector-grid {
   background-image:
-    linear-gradient(to right, rgba(148, 163, 184, 0.05) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(148, 163, 184, 0.05) 1px, transparent 1px);
+    linear-gradient(to right, rgba(244, 237, 228, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(244, 237, 228, 0.04) 1px, transparent 1px);
   background-size: 32px 32px;
+}
+
+/* Editorial section vignette — warm, not cool */
+.bg-feedroom {
+  background:
+    radial-gradient(
+      ellipse 80% 60% at 50% 0%,
+      rgba(255, 91, 31, 0.04) 0%,
+      transparent 70%
+    ),
+    var(--background);
+}
+
+/* CRT scanlines */
+.fx-scanline {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 2px,
+    rgba(0, 0, 0, 0.22) 2px,
+    rgba(0, 0, 0, 0.22) 3px
+  );
+}
+
+/* Film grain — embedded SVG, scaled for subtle texture */
+.fx-grain {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 0.93 0 0 0 0 0.89 0 0 0 0.65 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  background-size: 180px 180px;
+}
+
+/* Tally indicator pulse */
+@keyframes tally-pulse {
+  0%, 60%, 100% {
+    opacity: 1;
+  }
+  70%, 90% {
+    opacity: 0.18;
+  }
+}
+.fx-tally {
+  animation: tally-pulse 1.6s ease-in-out infinite;
+}
+
+/* Tile reveal — stagger via inline animation-delay */
+@keyframes tile-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.992);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+.fx-tile-in {
+  animation: tile-in 820ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/* Signal-acquired sweep on tile mount (single pass) */
+@keyframes signal-sweep {
+  0% {
+    transform: translateY(-110%);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(110%);
+    opacity: 0;
+  }
+}
+.fx-signal-sweep::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    transparent 40%,
+    rgba(255, 91, 31, 0.16) 50%,
+    transparent 60%
+  );
+  animation: signal-sweep 1500ms ease-out 1 forwards;
+  animation-delay: inherit;
+}
+
+/* Slow analyzer track-bar at base of each tile (continuous) */
+@keyframes analyzer-track {
+  0% {
+    transform: translateX(-110%);
+  }
+  100% {
+    transform: translateX(420%);
+  }
+}
+.fx-analyzer {
+  animation: analyzer-track 6.5s linear infinite;
+}
+
+/* Editorial caret blink */
+@keyframes caret-blink {
+  0%, 49% {
+    opacity: 1;
+  }
+  50%, 100% {
+    opacity: 0;
+  }
+}
+.fx-caret {
+  animation: caret-blink 1.05s steps(1, end) infinite;
+}
+
+/* Subtle ticker drift */
+@keyframes drift {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+.fx-drift {
+  animation: drift 32s linear infinite;
 }
