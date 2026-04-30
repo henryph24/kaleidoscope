@@ -87,8 +87,7 @@ function projectToImage(
 }
 
 export function generateMockFrames(scenario: ScenarioDef): FramesResponse {
-  const tracks = TRACKS[scenario.id];
-  if (!tracks) throw new Error(`No mock tracks defined for scenario ${scenario.id}`);
+  const tracks = TRACKS[scenario.id] ?? defaultTracksForCategory(scenario.category);
 
   const ext: CameraExtrinsics = {
     height: scenario.cameraHeightM,
@@ -167,6 +166,41 @@ function formatTimestamp(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = seconds - m * 60;
   return `${m.toString().padStart(2, "0")}:${s.toFixed(3).padStart(6, "0")}`;
+}
+
+/**
+ * Generic per-category fallback tracks for scenarios that don't have a hand-
+ * tuned entry in TRACKS. Keeps the demo functional for any new clip that's
+ * been registered in scenarios.ts without requiring per-scene authoring.
+ */
+function defaultTracksForCategory(
+  category: ScenarioDef["category"],
+): AgentTrack[] {
+  switch (category) {
+    case "driving":
+      return [
+        { id: "veh_lead", label: "vehicle", start: [0, 14], vel: [0, -1.6], t0: 0, t1: 15, intent: "Following lane, steady pace" },
+        { id: "veh_left", label: "vehicle", start: [-4, 22], vel: [1.2, -2.6], t0: 0, t1: 14, intent: "Approaching from oncoming lane" },
+        { id: "veh_right", label: "vehicle", start: [5, 26], vel: [-0.4, -3.2], t0: 1, t1: 15, intent: "Passing on the right" },
+        { id: "ped_curb", label: "pedestrian", start: [-5, 7], vel: [1.0, 0.1], t0: 3, t1: 14, intent: "Walking along curb" },
+      ];
+    case "sports":
+      return [
+        { id: "pl_a", label: "player", start: [-3, 18], vel: [0.4, -0.8], t0: 0, t1: 14, intent: "Drifting toward the action" },
+        { id: "pl_b", label: "player", start: [2, 20], vel: [-0.3, -1.0], t0: 0, t1: 14, intent: "Cutting baseline" },
+        { id: "pl_c", label: "player", start: [0, 22], vel: [0.2, -1.2], t0: 0, t1: 14, intent: "Receiving" },
+        { id: "ball", label: "ball", start: [0, 21], vel: [0.3, -1.0], t0: 0, t1: 12, intent: "Live ball" },
+      ];
+    case "cctv":
+    default:
+      return [
+        { id: "ped_a", label: "pedestrian", start: [-3, 8], vel: [1.0, 0.0], t0: 0, t1: 16, intent: "Walking, normal pace" },
+        { id: "ped_b", label: "pedestrian", start: [3, 9], vel: [-0.9, 0.1], t0: 0, t1: 16, intent: "Walking, normal pace" },
+        { id: "ped_c", label: "pedestrian", start: [-1, 11], vel: [0.6, -0.1], t0: 2, t1: 18, intent: "Walking, slow pace" },
+        { id: "ped_runner", label: "pedestrian", start: [-5, 6], vel: [2.6, 0.2], t0: 3, t1: 16, intent: "anomalous: speed >2x median" },
+        { id: "veh_pass", label: "vehicle", start: [6, 12], vel: [-2.0, 0.4], t0: 1, t1: 18, intent: "Passing through frame" },
+      ];
+  }
 }
 
 function scenarioContext(id: string): string {
