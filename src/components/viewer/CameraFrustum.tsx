@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo } from "react";
-import * as THREE from "three";
 import { Line } from "@react-three/drei";
 import type { SceneBundle } from "@/lib/scene-types";
 
@@ -11,16 +10,18 @@ interface Props {
   reach?: number;
 }
 
+const FRUSTUM_COLOR = "#f4ede4";
+const ORIGIN_COLOR = "#ff5b1f";
+
 /**
  * Visualises where the camera is and what it sees. The viewer's own camera
  * orbits around this frustum; the BEV mode looks straight down at it.
  */
-export function CameraFrustum({ scene, reach = 30 }: Props) {
+export function CameraFrustum({ scene, reach = 26 }: Props) {
   const { points, origin } = useMemo(() => {
     const { fx, fy, cx, cy } = scene.cameraIntrinsics;
     const W = scene.width;
     const H = scene.height;
-    // four image corners
     const corners: Array<[number, number]> = [
       [0, 0],
       [W, 0],
@@ -31,7 +32,6 @@ export function CameraFrustum({ scene, reach = 30 }: Props) {
     const cp = Math.cos(pitch);
     const sp = Math.sin(pitch);
 
-    // pixel → unit ray in camera frame, then rotate to world (camera→world = R_x(+pitch))
     const rays = corners.map(([u, v]) => {
       const xc = (u - cx) / fx;
       const yc = -(v - cy) / fy;
@@ -43,7 +43,6 @@ export function CameraFrustum({ scene, reach = 30 }: Props) {
 
     const oH = scene.cameraExtrinsics.height;
     const o: [number, number, number] = [0, oH, 0];
-    // far points along each ray, scaled so the longest dimension reaches `reach`
     const farPts = rays.map(([x, y, z]) => {
       const len = Math.hypot(x, y, z);
       const k = reach / len;
@@ -51,9 +50,7 @@ export function CameraFrustum({ scene, reach = 30 }: Props) {
     });
 
     const segs: Array<[number, number, number][]> = [];
-    // origin → 4 corners
     for (const p of farPts) segs.push([o, p]);
-    // far rectangle
     segs.push([farPts[0], farPts[1]]);
     segs.push([farPts[1], farPts[2]]);
     segs.push([farPts[2], farPts[3]]);
@@ -64,19 +61,24 @@ export function CameraFrustum({ scene, reach = 30 }: Props) {
 
   return (
     <group>
-      {/* camera body marker */}
+      {/* camera body marker — sodium amber for the only "active" point in the scene */}
       <mesh position={origin}>
-        <sphereGeometry args={[0.18, 16, 16]} />
-        <meshStandardMaterial color="#fbbf24" emissive="#fbbf24" emissiveIntensity={0.4} />
+        <sphereGeometry args={[0.15, 16, 16]} />
+        <meshBasicMaterial color={ORIGIN_COLOR} />
+      </mesh>
+      {/* tally ring around camera body */}
+      <mesh position={origin} rotation={[Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.28, 0.34, 32]} />
+        <meshBasicMaterial color={ORIGIN_COLOR} transparent opacity={0.5} side={2} />
       </mesh>
       {points.map((seg, i) => (
         <Line
           key={i}
           points={seg}
-          color="#fbbf24"
-          lineWidth={1}
+          color={FRUSTUM_COLOR}
+          lineWidth={0.8}
           transparent
-          opacity={0.45}
+          opacity={i < 4 ? 0.28 : 0.18}
         />
       ))}
     </group>
