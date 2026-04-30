@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { GitBranch } from "lucide-react";
 import { listScenes } from "@/lib/load-scene";
 import { SCENARIOS } from "../../prebake/scenarios";
@@ -117,7 +118,7 @@ export default async function Home() {
                 "PRE-BAKED · ZERO MARGINAL COST",
                 "MODAL T4 · POSTGRES",
                 "INTENT FORECAST · 3.0 S HORIZON",
-                "CCTV · DRIVING · SPORTS",
+                "DRIVING · CCTV · SPORTS · AERIAL",
               ].map((t, j) => (
                 <span
                   key={`${i}-${j}`}
@@ -132,12 +133,82 @@ export default async function Home() {
         </div>
       </main>
 
+      {/* === FEED LIBRARY (all scenes as static contact-sheet cards) === */}
+      {feeds.length > 3 && (
+        <section className="border-b border-rule px-5 py-16 sm:px-6 md:py-24">
+          <div className="mx-auto max-w-6xl">
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-3 text-[10px] uppercase tracking-[0.32em] text-fg-mute">
+                  <span className="inline-block h-px w-8 bg-accent" />
+                  <span>SEC. 02 — FEED LIBRARY</span>
+                </div>
+                <h2 className="mt-4 font-display text-3xl italic leading-[1.05] text-foreground md:text-5xl">
+                  Eight feeds. One vector space.
+                </h2>
+              </div>
+              <p className="max-w-sm text-[11px] uppercase tracking-[0.2em] text-fg-mute">
+                {feeds.length.toString().padStart(2, "0")} scenes · pre-baked ·
+                tap any feed to open its 3D reconstruction.
+              </p>
+            </div>
+
+            <div className="mt-10 grid grid-cols-2 gap-px bg-rule md:grid-cols-4">
+              {feeds.map((s) => (
+                <Link
+                  key={s.id}
+                  href={`/scene/${s.id}`}
+                  className="group relative aspect-video overflow-hidden bg-black"
+                >
+                  <img
+                    src={s.posterUrl}
+                    alt={s.title}
+                    className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.04]"
+                    loading="lazy"
+                  />
+                  <div className="fx-scanline pointer-events-none absolute inset-0 opacity-25 mix-blend-overlay" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-black/45" />
+
+                  {/* HUD top */}
+                  <div className="absolute inset-x-0 top-0 flex items-start justify-between p-3 text-[9px] uppercase tracking-[0.22em]">
+                    <span className="text-fg-mute">{s.category}</span>
+                    <span>
+                      <span className="text-accent">{s.feedNumber}</span>{" "}
+                      <span className="text-fg-mute">/ {totalFeeds}</span>
+                    </span>
+                  </div>
+
+                  {/* HUD bottom: title + cta */}
+                  <div className="absolute inset-x-0 bottom-0 px-3 pb-3">
+                    <div className="mb-2 h-px w-full bg-rule/60" />
+                    <div className="flex items-end justify-between gap-2">
+                      <h3 className="font-display text-[20px] italic leading-[1] text-foreground line-clamp-1 md:text-[22px]">
+                        {s.title}
+                      </h3>
+                      <span className="shrink-0 text-[9px] uppercase tracking-[0.22em] text-foreground/55 transition-colors group-hover:text-accent">
+                        OPEN ↗
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Corner brackets */}
+                  <span aria-hidden className="pointer-events-none absolute left-2 top-2 h-2 w-2 border-l border-t border-foreground/40" />
+                  <span aria-hidden className="pointer-events-none absolute right-2 top-2 h-2 w-2 border-r border-t border-foreground/40" />
+                  <span aria-hidden className="pointer-events-none absolute bottom-2 left-2 h-2 w-2 border-b border-l border-foreground/40" />
+                  <span aria-hidden className="pointer-events-none absolute bottom-2 right-2 h-2 w-2 border-b border-r border-foreground/40" />
+                </Link>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* === EDITORIAL / METHODOLOGY === */}
       <section className="bg-feedroom relative px-5 py-20 sm:px-6 md:py-32">
         <div className="mx-auto max-w-6xl">
           <div className="flex items-center gap-3 text-[10px] uppercase tracking-[0.32em] text-fg-mute">
             <span className="inline-block h-px w-8 bg-accent" />
-            <span>SEC. 02 — METHODOLOGY</span>
+            <span>SEC. 03 — METHODOLOGY</span>
           </div>
           <h2 className="mt-6 max-w-4xl text-balance font-display text-4xl leading-[1.02] text-foreground md:text-6xl lg:text-7xl">
             Read the scene.

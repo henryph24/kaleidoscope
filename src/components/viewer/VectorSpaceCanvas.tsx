@@ -11,7 +11,6 @@ import { CameraFrustum } from "./CameraFrustum";
 const BG = "#0a0908";
 const FG = "#f4ede4";
 const ACCENT = "#ff5b1f";
-const RULE = "#2a2620";
 const GRID_CELL = "#1f1c18";
 const GRID_SECTION = "#3a342d";
 

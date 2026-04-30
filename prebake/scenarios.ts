@@ -80,4 +80,89 @@ export const SCENARIOS: ScenarioDef[] = [
     promptAddendum:
       "Flag any agent whose speed exceeds 2x the median pedestrian speed. Mark them with intent='anomalous'.",
   },
+  {
+    id: "krakow_city_drive",
+    title: "Old-Town Loop",
+    category: "driving",
+    description:
+      "Daytime city driving through Kraków's old-town circuit. Tests perception under benign-but-cluttered conditions: cars, trams, pedestrians, cyclists, signage.",
+    videoUrl: "/clips/krakow_city_drive.mp4",
+    fps: 1,
+    width: 1280,
+    height: 720,
+    durationSec: 15,
+    hfovDeg: 70,
+    cameraHeightM: 1.5,
+    cameraPitchDeg: 5,
+    promptAddendum:
+      "Distinguish pedestrians, cyclists, and trams. Note any who are likely to enter the lane.",
+  },
+  {
+    id: "cdmx_chapultepec",
+    title: "Chapultepec Crossing",
+    category: "cctv",
+    description:
+      "Near-overhead drone view of a six-way Mexico City intersection. Showcases multi-agent trajectory forecasting from above with cars, taxis, and crossing pedestrians.",
+    videoUrl: "/clips/cdmx_chapultepec.mp4",
+    fps: 2,
+    width: 1280,
+    height: 720,
+    durationSec: 12,
+    hfovDeg: 70,
+    cameraHeightM: 50,
+    cameraPitchDeg: 75,
+    promptAddendum:
+      "Treat each vehicle as an agent. Predict turning intent from heading change over the prior 1.5s.",
+  },
+  {
+    id: "cdmx_cuauhtemoc",
+    title: "Cuauhtémoc Junction",
+    category: "cctv",
+    description:
+      "Drone view of a Mexico City avenue intersection. Tests intent prediction under heavier traffic — anticipate which lane a vehicle will commit to.",
+    videoUrl: "/clips/cdmx_cuauhtemoc.mp4",
+    fps: 2,
+    width: 1280,
+    height: 720,
+    durationSec: 12,
+    hfovDeg: 70,
+    cameraHeightM: 60,
+    cameraPitchDeg: 70,
+    promptAddendum:
+      "Treat each vehicle as an agent. Mark intent as 'turning_left', 'turning_right', or 'straight' once heading change > 10°.",
+  },
+  {
+    id: "glasgow_buchanan",
+    title: "Buchanan Street",
+    category: "cctv",
+    description:
+      "Fixed eye-level view of Glasgow's pedestrian high street. Heavy human flow, occasional cyclists. Tests dense pedestrian tracking and intent classification.",
+    videoUrl: "/clips/glasgow_buchanan.mp4",
+    fps: 1,
+    width: 1280,
+    height: 720,
+    durationSec: 15,
+    hfovDeg: 60,
+    cameraHeightM: 2.5,
+    cameraPitchDeg: 0,
+    promptAddendum:
+      "Track pedestrians by direction of travel. Flag anyone moving against the dominant flow as intent='anomalous'.",
+  },
+  {
+    id: "wuhan_pedestrian",
+    title: "Yangtze Stroll",
+    category: "driving",
+    description:
+      "First-person walk through a Wuhan riverfront pedestrian street. Slow forward motion through dense crowds — tests occlusion and short-horizon intent at human scale.",
+    videoUrl: "/clips/wuhan_pedestrian.mp4",
+    fps: 1,
+    width: 1280,
+    height: 720,
+    durationSec: 15,
+    hfovDeg: 70,
+    cameraHeightM: 1.6,
+    cameraPitchDeg: 5,
+    promptAddendum:
+      "Track every pedestrian within 6m. Predict whether they will pass left, pass right, or stop within the next 2s.",
+  },
 ];
