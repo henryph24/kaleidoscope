@@ -160,7 +160,7 @@ async function loadFromMock(id: string): Promise<SceneBundle | null> {
 
   const frames: FrameSnapshot[] = data.frames.map((f) => ({
     timestampSec: parseTs(f.timestamp),
-    sceneContext: f.scene_context,
+    sceneContext: f.scene_context ?? null,
     agents: f.agents.map((a) => ({
       agentId: a.id,
       label: a.label,
@@ -169,8 +169,8 @@ async function loadFromMock(id: string): Promise<SceneBundle | null> {
       velocity: [a.velocity[0], a.velocity[1], a.velocity[2]],
       headingDeg: a.heading_deg,
       confidence: a.confidence,
-      intent: a.intent,
-      trajectoryForecast: a.trajectory_forecast,
+      intent: a.intent ?? null,
+      trajectoryForecast: a.trajectory_forecast ?? null,
     })),
   }));
 

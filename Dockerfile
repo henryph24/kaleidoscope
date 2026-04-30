@@ -5,7 +5,10 @@ FROM node:24-alpine AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci --no-audit --no-fund
+# Use `install` not `ci` because some optional deps (@emnapi/*, @next/swc-*)
+# are platform-specific and the lockfile generated on macOS doesn't always
+# capture the linux-x64-musl variants needed inside this Alpine image.
+RUN npm install --no-audit --no-fund --include=optional
 
 # ---------- build ----------
 FROM node:24-alpine AS builder

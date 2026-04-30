@@ -46,6 +46,86 @@ secret = modal.Secret.from_name(
     required_keys=["GOOGLE_API_KEY"],
 )
 
+# Persistent budget ledger, keyed by "YYYY-MM" -> {"spend_usd": float, "calls": int}.
+# Survives container restarts; mirrors src/lib/budget.ts logic on the Modal side.
+budget_ledger = modal.Dict.from_name("kaleidoscope-budget-ledger", create_if_missing=True)
+
+
+# ---------- Budget enforcement (mirrors src/lib/budget.ts) ----------
+
+# USD per 1M tokens. Verify against ai.google.dev/pricing before raising caps.
+PRICING_PER_M_TOKENS: dict[str, dict[str, float]] = {
+    "gemini-2.0-flash-exp": {"input": 0.0, "output": 0.0},
+    "gemini-2.0-flash": {"input": 0.10, "output": 0.40},
+    "gemini-2.5-flash-lite": {"input": 0.10, "output": 0.40},
+    "gemini-2.5-flash": {"input": 0.30, "output": 2.50},
+    "gemini-2.5-pro": {"input": 1.25, "output": 10.00},
+}
+VIDEO_TOKENS_PER_SEC = 258
+MAX_OUTPUT_TOKENS_PER_CALL = int(os.environ.get("GEMINI_MAX_OUTPUT_TOKENS", "30000"))
+MAX_VIDEO_SEC_PER_CALL = float(os.environ.get("GEMINI_MAX_VIDEO_SEC", "60"))
+DEFAULT_BUDGET_USD = 10.0
+
+
+def _monthly_budget_usd() -> float:
+    return float(os.environ.get("GEMINI_MONTHLY_BUDGET_USD", DEFAULT_BUDGET_USD))
+
+
+def _pricing_for(model: str) -> dict[str, float]:
+    # Unknown model → assume Pro pricing so we never under-estimate.
+    return PRICING_PER_M_TOKENS.get(model, PRICING_PER_M_TOKENS["gemini-2.5-pro"])
+
+
+def _current_month_key() -> str:
+    from datetime import datetime, timezone
+
+    d = datetime.now(timezone.utc)
+    return f"{d.year:04d}-{d.month:02d}"
+
+
+def _estimate_cost_usd(model: str, video_seconds: float) -> float:
+    p = _pricing_for(model)
+    in_tok = int(video_seconds * VIDEO_TOKENS_PER_SEC) + 500  # +prompt
+    return (in_tok / 1_000_000) * p["input"] + (
+        MAX_OUTPUT_TOKENS_PER_CALL / 1_000_000
+    ) * p["output"]
+
+
+def _month_to_date_usd() -> float:
+    entry = budget_ledger.get(_current_month_key(), default=None)
+    if not entry:
+        return 0.0
+    return float(entry.get("spend_usd", 0.0))
+
+
+def _assert_within_budget(model: str, video_seconds: float | None) -> None:
+    seconds = video_seconds if video_seconds and video_seconds > 0 else MAX_VIDEO_SEC_PER_CALL
+    if seconds > MAX_VIDEO_SEC_PER_CALL:
+        raise RuntimeError(
+            f"Video duration {seconds:.1f}s exceeds GEMINI_MAX_VIDEO_SEC="
+            f"{MAX_VIDEO_SEC_PER_CALL}s. Refusing to send."
+        )
+    estimate = _estimate_cost_usd(model, seconds)
+    remaining = max(0.0, _monthly_budget_usd() - _month_to_date_usd())
+    if estimate > remaining:
+        raise RuntimeError(
+            f"Gemini call would cost ~${estimate:.4f} but only ${remaining:.4f} "
+            f"remains in this month's ${_monthly_budget_usd()} budget "
+            f"(model={model}, video={seconds:.1f}s). Raise GEMINI_MONTHLY_BUDGET_USD to override."
+        )
+
+
+def _record_spend(model: str, prompt_tok: int, output_tok: int) -> tuple[float, float]:
+    p = _pricing_for(model)
+    spend = (prompt_tok / 1_000_000) * p["input"] + (output_tok / 1_000_000) * p["output"]
+    key = _current_month_key()
+    cur = budget_ledger.get(key, default={"spend_usd": 0.0, "calls": 0})
+    cur["spend_usd"] = float(cur.get("spend_usd", 0.0)) + spend
+    cur["calls"] = int(cur.get("calls", 0)) + 1
+    cur["last_updated"] = time.time()
+    budget_ledger[key] = cur
+    return spend, cur["spend_usd"]
+
 
 # ---------- Pydantic schema (mirror of src/lib/gemini-schema.ts) ----------
 
@@ -172,10 +252,14 @@ def analyze_with_gemini(
     video_url: str,
     fps: float = 1.0,
     model: str = "gemini-2.0-flash-exp",
+    video_duration_sec: float | None = None,
 ) -> dict[str, Any]:
     """Send the video URI to Gemini and return validated FramesResponse JSON."""
     from google import genai
     from google.genai import types
+
+    # Pre-flight budget gate. Raises if estimate would exceed remaining budget.
+    _assert_within_budget(model, video_duration_sec)
 
     api_key = os.environ["GOOGLE_API_KEY"]
     client = genai.Client(api_key=api_key)
@@ -211,6 +295,8 @@ def analyze_with_gemini(
             system_instruction=system_instruction,
             response_mime_type="application/json",
             temperature=0.2,
+            # Hard ceiling enforced by the API itself, not just our estimator.
+            max_output_tokens=MAX_OUTPUT_TOKENS_PER_CALL,
         ),
     )
     latency_ms = int((time.time() - t0) * 1000)
@@ -218,10 +304,18 @@ def analyze_with_gemini(
     raw_text = response.text or ""
     parsed = FramesResponse.model_validate_json(raw_text)
 
+    # Authoritative spend recorded from the SDK's usage_metadata.
+    usage = getattr(response, "usage_metadata", None)
+    prompt_tok = int(getattr(usage, "prompt_token_count", 0) or 0) if usage else 0
+    output_tok = int(getattr(usage, "candidates_token_count", 0) or 0) if usage else 0
+    spend_usd, mtd_usd = _record_spend(model, prompt_tok, output_tok)
+
     return {
         "model": model,
         "latency_ms": latency_ms,
         "frames": [f.model_dump() for f in parsed.frames],
+        "spend_usd": spend_usd,
+        "month_to_date_usd": mtd_usd,
     }
 
 
@@ -242,7 +336,11 @@ def analyze(
     keyframes_meta = extract_keyframes.remote(video_url=video_url, target_fps=fps)
     modal_latency_ms = int((time.time() - t0) * 1000)
 
-    gemini_result = analyze_with_gemini.remote(video_url=video_url, fps=fps)
+    gemini_result = analyze_with_gemini.remote(
+        video_url=video_url,
+        fps=fps,
+        video_duration_sec=keyframes_meta["duration_sec"],
+    )
 
     return {
         "scene_id": scene_id,
@@ -255,6 +353,8 @@ def analyze(
         "model": gemini_result["model"],
         "modal_latency_ms": modal_latency_ms,
         "gemini_latency_ms": gemini_result["latency_ms"],
+        "spend_usd": gemini_result["spend_usd"],
+        "month_to_date_usd": gemini_result["month_to_date_usd"],
         "frames": gemini_result["frames"],
     }
 

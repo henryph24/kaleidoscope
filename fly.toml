@@ -9,7 +9,7 @@
 # and mount it at /data/clips (uncomment the [mounts] block below):
 #   fly volumes create clips --region sin --size 5
 
-app = "kaleidoscope"
+app = "kaleidoscope-hpq"
 primary_region = "sin"
 
 [build]

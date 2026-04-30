@@ -117,7 +117,7 @@ export default async function Home() {
           <div className="mt-10 grid grid-cols-1 gap-6 md:grid-cols-3">
             <Stat label="Stack" value="Next.js · R3F · Drizzle" />
             <Stat label="Compute" value="Modal (T4) · Gemini" />
-            <Stat label="Hosting" value="Fly.io · MPG · Tigris" />
+            <Stat label="Hosting" value="Fly.io · MPG" />
           </div>
         </div>
       </section>

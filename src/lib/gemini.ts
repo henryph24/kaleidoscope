@@ -5,13 +5,20 @@ import {
   SYSTEM_INSTRUCTION,
   type FramesResponse,
 } from "./gemini-schema";
+import {
+  MAX_OUTPUT_TOKENS_PER_CALL,
+  assertWithinBudget,
+  recordSpend,
+} from "./budget";
 
 /**
  * Pin to the strongest video-capable model in the Gemini Pro tier at build time.
  * Override via env if you want to A/B against Flash for cost.
  */
+// Use `||` not `??` so an empty `GEMINI_MODEL=` line in .env still falls back.
+// `gemini-2.0-flash-exp` was retired; current cheapest is 2.5-flash-lite.
 export const DEFAULT_MODEL =
-  process.env.GEMINI_MODEL ?? "gemini-2.0-flash-exp";
+  process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
 
 function client(): GoogleGenAI {
   const apiKey = process.env.GOOGLE_API_KEY;
@@ -20,7 +27,7 @@ function client(): GoogleGenAI {
 }
 
 export interface AnalyzeOptions {
-  /** Public URL of the video clip (Tigris signed URL or YouTube). */
+  /** Public URL of the video clip (HTTPS or YouTube). */
   videoUrl?: string;
   /** Or pre-uploaded file via the Files API (preferred for clips > 20MB). */
   file?: GenAIFile;
@@ -30,6 +37,8 @@ export interface AnalyzeOptions {
   model?: string;
   /** Sample rate hint to mention in the user prompt. */
   fps?: number;
+  /** Duration of the source clip — used for the budget pre-flight estimate. */
+  videoDurationSec?: number;
 }
 
 export interface AnalyzeResult {
@@ -37,6 +46,8 @@ export interface AnalyzeResult {
   raw: string;
   latencyMs: number;
   model: string;
+  spendUsd: number;
+  monthToDateUsd: number;
 }
 
 /**
@@ -66,22 +77,73 @@ export async function analyzeVideo(opts: AnalyzeOptions): Promise<AnalyzeResult>
     throw new Error("analyzeVideo requires either `file` or `videoUrl`");
   }
 
+  // Pre-flight budget gate. Throws if estimate would exceed remaining budget
+  // or if the clip is longer than GEMINI_MAX_VIDEO_SEC.
+  await assertWithinBudget(model, opts.videoDurationSec);
+
   const t0 = Date.now();
-  const response = await ai.models.generateContent({
-    model,
-    contents: [{ role: "user", parts }],
-    config: {
-      systemInstruction: opts.systemInstruction ?? SYSTEM_INSTRUCTION,
-      responseMimeType: "application/json",
-      responseSchema: GEMINI_RESPONSE_SCHEMA,
-      temperature: 0.2,
-    },
-  });
+  // Retry on transient errors (503 UNAVAILABLE, socket close mid-stream).
+  // These are common on longer clips when Gemini is under load. Backoff: 2s, 6s, 18s.
+  const response = await retryTransient(() =>
+    ai.models.generateContent({
+      model,
+      contents: [{ role: "user", parts }],
+      config: {
+        systemInstruction: opts.systemInstruction ?? SYSTEM_INSTRUCTION,
+        responseMimeType: "application/json",
+        responseSchema: GEMINI_RESPONSE_SCHEMA,
+        temperature: 0.2,
+        // Hard ceiling enforced by the API itself, not just our estimator.
+        maxOutputTokens: MAX_OUTPUT_TOKENS_PER_CALL,
+      },
+    }),
+  );
   const latencyMs = Date.now() - t0;
 
   const raw = response.text ?? "";
   if (!raw) throw new Error("Gemini returned empty response");
 
+  // Authoritative spend recorded from the SDK's usage_metadata.
+  const usage = response.usageMetadata ?? {};
+  const { spendUsd, monthToDateUsd } = await recordSpend(model, {
+    promptTokenCount: usage.promptTokenCount,
+    candidatesTokenCount: usage.candidatesTokenCount,
+    totalTokenCount: usage.totalTokenCount,
+  });
+
   const parsed = FramesResponseSchema.parse(JSON.parse(raw));
-  return { data: parsed, raw, latencyMs, model };
+  return { data: parsed, raw, latencyMs, model, spendUsd, monthToDateUsd };
+}
+
+/**
+ * Retry a Gemini call up to 3 times on errors that empirically come and go:
+ *   - 503 UNAVAILABLE ("high demand")
+ *   - undici UND_ERR_SOCKET / "fetch failed" (server-side stream close)
+ *   - 429 RESOURCE_EXHAUSTED
+ * Other errors (4xx schema/auth bugs) bubble immediately.
+ */
+async function retryTransient<T>(fn: () => Promise<T>): Promise<T> {
+  const delaysMs = [2_000, 6_000, 18_000];
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= delaysMs.length; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      const msg = (err as Error).message ?? "";
+      const cause = (err as { cause?: { code?: string } }).cause;
+      const transient =
+        msg.includes("UNAVAILABLE") ||
+        msg.includes("RESOURCE_EXHAUSTED") ||
+        msg.includes("fetch failed") ||
+        msg.includes("503") ||
+        msg.includes("429") ||
+        cause?.code === "UND_ERR_SOCKET";
+      if (!transient || attempt === delaysMs.length) throw err;
+      const wait = delaysMs[attempt];
+      console.warn(`  · transient Gemini error (${msg.slice(0, 80)}); retrying in ${wait / 1000}s…`);
+      await new Promise((r) => setTimeout(r, wait));
+    }
+  }
+  throw lastErr;
 }

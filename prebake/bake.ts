@@ -12,6 +12,9 @@
  */
 
 import "dotenv/config";
+import path from "node:path";
+import fs from "node:fs";
+import { GoogleGenAI, type File as GenAIFile } from "@google/genai";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
@@ -34,7 +37,56 @@ function parseTimestamp(ts: string): number {
   return parseInt(mm, 10) * 60 + parseFloat(rest);
 }
 
-async function bakeOne(scenario: ScenarioDef, db: ReturnType<typeof drizzle> | null) {
+/**
+ * Resolve a scenario's `videoUrl` to something Gemini can consume.
+ *
+ * - https:// or YouTube → return as videoUrl (Gemini fetches directly).
+ * - everything else → treat as a local path under CLIPS_DIR, upload via
+ *   the Files API, wait for ACTIVE, return the File handle.
+ *
+ * Returns the file so the caller can delete it after the bake to keep the
+ * Files API quota clean (24h auto-expiry otherwise).
+ */
+async function resolveVideoSource(
+  ai: GoogleGenAI,
+  scenario: ScenarioDef,
+): Promise<{ videoUrl?: string; file?: GenAIFile }> {
+  if (/^https?:\/\//.test(scenario.videoUrl)) {
+    return { videoUrl: scenario.videoUrl };
+  }
+
+  const localPath = path.join(
+    process.env.CLIPS_DIR ?? "public/clips",
+    path.basename(scenario.videoUrl),
+  );
+  if (!fs.existsSync(localPath)) {
+    throw new Error(`local clip not found: ${localPath}`);
+  }
+
+  const tUp = Date.now();
+  let file = await ai.files.upload({
+    file: localPath,
+    config: { mimeType: "video/mp4", displayName: scenario.id },
+  });
+  // Wait for ACTIVE — Gemini won't accept a PROCESSING file in generateContent.
+  while (file.state === "PROCESSING") {
+    await new Promise((r) => setTimeout(r, 1500));
+    file = await ai.files.get({ name: file.name! });
+  }
+  if (file.state !== "ACTIVE") {
+    throw new Error(`Files API state=${file.state} for ${scenario.id}`);
+  }
+  console.log(
+    `  · uploaded ${path.basename(localPath)} → ${file.uri} (${Date.now() - tUp}ms)`,
+  );
+  return { file };
+}
+
+async function bakeOne(
+  scenario: ScenarioDef,
+  db: ReturnType<typeof drizzle> | null,
+  ai: GoogleGenAI | null,
+) {
   console.log(`\n▸ ${scenario.id}  (${scenario.title})`);
   const t0 = Date.now();
 
@@ -42,17 +94,27 @@ async function bakeOne(scenario: ScenarioDef, db: ReturnType<typeof drizzle> | n
   let modelName = "mock-deterministic-v1";
   let geminiLatency = 0;
   let modalLatency = 0;
+  let uploadedFile: GenAIFile | undefined;
 
   if (LIVE) {
-    console.log(`  · calling Gemini (${scenario.videoUrl})`);
+    if (!ai) throw new Error("LIVE mode requires GoogleGenAI client");
+    console.log(`  · resolving source (${scenario.videoUrl})`);
+    const src = await resolveVideoSource(ai, scenario);
+    uploadedFile = src.file;
+
     const result = await analyzeVideo({
-      videoUrl: scenario.videoUrl,
+      videoUrl: src.videoUrl,
+      file: src.file,
       fps: scenario.fps,
       systemInstruction: scenario.promptAddendum,
+      videoDurationSec: scenario.durationSec,
     });
     response = result.data;
     modelName = result.model;
     geminiLatency = result.latencyMs;
+    console.log(
+      `  · spent $${result.spendUsd.toFixed(4)} (month-to-date $${result.monthToDateUsd.toFixed(4)})`,
+    );
   } else {
     console.log("  · using deterministic mock (pass --live for real Gemini)");
     response = generateMockFrames(scenario);
@@ -118,8 +180,14 @@ async function bakeOne(scenario: ScenarioDef, db: ReturnType<typeof drizzle> | n
 
   await db.insert(schema.scenes).values(sceneRow);
 
-  for (const f of response.frames) {
-    const tSec = parseTimestamp(f.timestamp);
+  // Dedupe frames by timestamp — Gemini occasionally emits two frames with the
+  // same MM:SS.mmm string, which violates the (scene_id, timestamp_sec) PK.
+  // Last-write-wins matches "what the model produced most recently" for that tick.
+  const framesByTs = new Map<number, (typeof response.frames)[number]>();
+  for (const f of response.frames) framesByTs.set(parseTimestamp(f.timestamp), f);
+  const dedupedFrames = [...framesByTs.entries()].sort(([a], [b]) => a - b);
+
+  for (const [tSec, f] of dedupedFrames) {
     await db.insert(schema.frames).values({
       sceneId: scenario.id,
       timestampSec: tSec,
@@ -127,8 +195,11 @@ async function bakeOne(scenario: ScenarioDef, db: ReturnType<typeof drizzle> | n
       projectionMatrix: projectionMatrix as unknown as number[],
     });
     if (f.agents.length === 0) continue;
+    // Dedupe agents by id within a frame too — same reason.
+    const agentsById = new Map<string, (typeof f.agents)[number]>();
+    for (const a of f.agents) agentsById.set(a.id, a);
     await db.insert(schema.agents).values(
-      f.agents.map((a) => ({
+      [...agentsById.values()].map((a) => ({
         sceneId: scenario.id,
         timestampSec: tSec,
         agentId: a.id,
@@ -149,11 +220,11 @@ async function bakeOne(scenario: ScenarioDef, db: ReturnType<typeof drizzle> | n
     );
   }
 
-  // Synthesize an intent log from the agents (one entry per intent change)
+  // Synthesize an intent log from the agents (one entry per intent change).
+  // Walk the deduped frames so timestamps line up with what we just inserted.
   let seq = 0;
   const lastIntent = new Map<string, string>();
-  for (const f of response.frames) {
-    const tSec = parseTimestamp(f.timestamp);
+  for (const [tSec, f] of dedupedFrames) {
     for (const a of f.agents) {
       if (!a.intent) continue;
       if (lastIntent.get(a.id) === a.intent) continue;
@@ -164,6 +235,16 @@ async function bakeOne(scenario: ScenarioDef, db: ReturnType<typeof drizzle> | n
         seq: seq++,
         message: `[${a.id}] ${a.intent}`,
       });
+    }
+  }
+
+  // Free Files API quota — uploaded clips auto-expire after 24h, but cleanup
+  // is polite when running back-to-back bakes.
+  if (uploadedFile && ai) {
+    try {
+      await ai.files.delete({ name: uploadedFile.name! });
+    } catch (e) {
+      console.warn(`  · cleanup failed for ${uploadedFile.name}: ${(e as Error).message}`);
     }
   }
 
@@ -179,6 +260,13 @@ async function main() {
 
   let db: ReturnType<typeof drizzle> | null = null;
   let sql: postgres.Sql | null = null;
+  let ai: GoogleGenAI | null = null;
+
+  if (LIVE) {
+    const apiKey = process.env.GOOGLE_API_KEY;
+    if (!apiKey) throw new Error("--live requires GOOGLE_API_KEY in .env");
+    ai = new GoogleGenAI({ apiKey });
+  }
 
   if (!DRY) {
     const url = process.env.DATABASE_URL;
@@ -192,7 +280,7 @@ async function main() {
 
   for (const s of targets) {
     try {
-      await bakeOne(s, db);
+      await bakeOne(s, db, ai);
     } catch (err) {
       console.error(`✗ ${s.id} failed:`, err);
     }

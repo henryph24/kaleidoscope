@@ -10,8 +10,9 @@ yarn-debug.log*
 yarn-error.log*
 README.md
 modal/
-prebake/
 tests/
+# prebake/ is needed at build time — load-scene.ts dynamic-imports
+# scenarios.ts and mock.ts as a fallback when DB is empty.
 *.log
 .vscode
 .idea

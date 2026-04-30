@@ -6,6 +6,9 @@ import { z } from "zod";
  * validate the response before persisting.
  */
 
+// Optional fields use `.nullish()` — accepts string-or-null-or-undefined, since
+// Gemini may omit a field entirely rather than emitting `null`. Mirrors the
+// Pydantic schema in modal/pipeline.py where these fields default to None.
 export const AgentSchema = z.object({
   id: z.string(),
   label: z.enum([
@@ -17,21 +20,21 @@ export const AgentSchema = z.object({
     "other",
   ]),
   pos_2d: z.tuple([z.number(), z.number()]),
-  pos_3d: z.tuple([z.number(), z.number(), z.number()]).nullable(),
+  pos_3d: z.tuple([z.number(), z.number(), z.number()]).nullish(),
   velocity: z.tuple([z.number(), z.number(), z.number()]),
   heading_deg: z.number().min(0).max(360),
   confidence: z.number().min(0).max(1),
-  intent: z.string().nullable(),
+  intent: z.string().nullish(),
   trajectory_forecast: z
     .array(z.tuple([z.number(), z.number(), z.number()]))
     .max(6)
-    .nullable(),
+    .nullish(),
 });
 
 export const FrameSchema = z.object({
   timestamp: z.string(), // "MM:SS.mmm"
   agents: z.array(AgentSchema),
-  scene_context: z.string().nullable(),
+  scene_context: z.string().nullish(),
 });
 
 export const FramesResponseSchema = z.object({

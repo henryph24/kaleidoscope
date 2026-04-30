@@ -1,8 +1,9 @@
 /**
  * Scenario registry. Editing this file is how you add a new pre-baked clip.
  *
- * `videoUrl` should be a Tigris signed URL in production. For local dev /
- * mocked baking, point at a public sample (Pexels, etc.) or a file under /public.
+ * `videoUrl` is either an HTTPS URL (passed directly to Gemini) or a path
+ * under CLIPS_DIR (defaults to `public/clips/`) — local paths are uploaded
+ * via the Files API in prebake/bake.ts before the call.
  */
 
 export interface ScenarioDef {

@@ -103,7 +103,20 @@ export const intentLog = pgTable(
   ],
 );
 
+/**
+ * Per-month Gemini API spend ledger. One row per "YYYY-MM".
+ * Source of truth for the hard monthly budget cap enforced in src/lib/budget.ts.
+ * Survives redeploys, queryable via `fly mpg connect`.
+ */
+export const budgetLedger = pgTable("budget_ledger", {
+  monthKey: text("month_key").primaryKey(), // "YYYY-MM"
+  spendUsd: real("spend_usd").notNull().default(0),
+  calls: integer("calls").notNull().default(0),
+  lastUpdated: timestamp("last_updated").defaultNow().notNull(),
+});
+
 export type Scene = typeof scenes.$inferSelect;
 export type Frame = typeof frames.$inferSelect;
 export type Agent = typeof agents.$inferSelect;
 export type IntentLogEntry = typeof intentLog.$inferSelect;
+export type BudgetLedgerRow = typeof budgetLedger.$inferSelect;
