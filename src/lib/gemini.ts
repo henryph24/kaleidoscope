@@ -59,7 +59,12 @@ export async function analyzeVideo(opts: AnalyzeOptions): Promise<AnalyzeResult>
   const model = opts.model ?? DEFAULT_MODEL;
   const fps = opts.fps ?? 1;
 
-  const userPrompt = `Analyze this video at approximately ${fps} FPS. For every sampled frame, return the agents, their 3D positions, velocities, intent, and trajectory_forecast. Use the response schema strictly.`;
+  const userPrompt = `Analyze this video at approximately ${fps} FPS. For every sampled frame, return the agents, their 3D positions, velocities, intent, and trajectory_forecast. Use the response schema strictly.
+
+Hard limits to keep the response within size bounds:
+- Emit at most 8 agents per frame. If more are visible, prioritise (a) agents nearest the camera, (b) agents whose motion is changing, (c) agents most relevant to the scene's primary subject.
+- Keep \`intent\` to one short clause (under 80 characters).
+- \`scene_context\` is optional — include only if it adds something a reader can't infer from agents alone.`;
 
   const parts: Array<Record<string, unknown>> = [{ text: userPrompt }];
   if (opts.file) {
@@ -111,8 +116,78 @@ export async function analyzeVideo(opts: AnalyzeOptions): Promise<AnalyzeResult>
     totalTokenCount: usage.totalTokenCount,
   });
 
-  const parsed = FramesResponseSchema.parse(JSON.parse(raw));
+  const parsed = FramesResponseSchema.parse(parseFramesJson(raw));
   return { data: parsed, raw, latencyMs, model, spendUsd, monthToDateUsd };
+}
+
+/**
+ * Parse Gemini's JSON response, tolerating truncation when the model hits its
+ * output token cap mid-frame. The wire format is always
+ * `{"frames":[{...},{...},...]}`. If the literal text fails to parse, we walk
+ * the `frames` array and keep every fully-formed frame object up to the point
+ * truncation occurred. Better to bake a partial scene than throw the whole
+ * call away.
+ */
+function parseFramesJson(raw: string): unknown {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    const repaired = repairTruncatedFrames(raw);
+    if (repaired) {
+      console.warn(
+        `  · Gemini response truncated mid-frame; recovered ${repaired.frameCount} complete frames before the break.`,
+      );
+      return repaired.value;
+    }
+    // give up — surface the original error
+    return JSON.parse(raw);
+  }
+}
+
+function repairTruncatedFrames(
+  raw: string,
+): { value: unknown; frameCount: number } | null {
+  const framesIdx = raw.indexOf('"frames"');
+  if (framesIdx < 0) return null;
+  const arrStart = raw.indexOf("[", framesIdx);
+  if (arrStart < 0) return null;
+
+  const completeFrames: string[] = [];
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  let frameStart = -1;
+
+  for (let i = arrStart + 1; i < raw.length; i++) {
+    const c = raw[i];
+    if (escape) {
+      escape = false;
+      continue;
+    }
+    if (c === "\\") {
+      escape = true;
+      continue;
+    }
+    if (c === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+    if (c === "{") {
+      if (depth === 0) frameStart = i;
+      depth++;
+    } else if (c === "}") {
+      depth--;
+      if (depth === 0 && frameStart >= 0) {
+        completeFrames.push(raw.slice(frameStart, i + 1));
+        frameStart = -1;
+      }
+    }
+  }
+
+  if (completeFrames.length === 0) return null;
+  const value = JSON.parse(`{"frames":[${completeFrames.join(",")}]}`);
+  return { value, frameCount: completeFrames.length };
 }
 
 /**
