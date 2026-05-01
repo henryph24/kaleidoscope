@@ -38,7 +38,7 @@ export interface IntentLogEntry {
 export interface SceneBundle {
   id: string;
   title: string;
-  category: "driving" | "sports" | "cctv";
+  category: "driving" | "sports" | "cctv" | "aerial";
   description: string;
   videoUrl: string;
   durationSec: number;

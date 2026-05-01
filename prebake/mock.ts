@@ -191,6 +191,16 @@ function defaultTracksForCategory(
         { id: "pl_c", label: "player", start: [0, 22], vel: [0.2, -1.2], t0: 0, t1: 14, intent: "Receiving" },
         { id: "ball", label: "ball", start: [0, 21], vel: [0.3, -1.0], t0: 0, t1: 12, intent: "Live ball" },
       ];
+    case "aerial":
+      // Higher altitude → larger world frame; agents are vehicles spread over
+      // a wider area moving along arterial directions.
+      return [
+        { id: "veh_n", label: "vehicle", start: [-4, 30], vel: [0, -3.5], t0: 0, t1: 15, intent: "Northbound, lane 1" },
+        { id: "veh_s", label: "vehicle", start: [4, 8], vel: [0, 3.0], t0: 0, t1: 15, intent: "Southbound, lane 2" },
+        { id: "veh_e", label: "vehicle", start: [-25, 18], vel: [3.0, 0], t0: 1, t1: 14, intent: "Eastbound through" },
+        { id: "veh_w", label: "vehicle", start: [22, 22], vel: [-2.6, 0], t0: 2, t1: 14, intent: "Westbound through" },
+        { id: "veh_turn", label: "vehicle", start: [0, 18], vel: [1.4, -1.2], t0: 1, t1: 13, intent: "Right turn imminent" },
+      ];
     case "cctv":
     default:
       return [

@@ -9,7 +9,7 @@
 export interface ScenarioDef {
   id: string;
   title: string;
-  category: "driving" | "sports" | "cctv";
+  category: "driving" | "sports" | "cctv" | "aerial";
   description: string;
   videoUrl: string;
   /** estimated FPS to ask Gemini to sample at */
@@ -100,7 +100,7 @@ export const SCENARIOS: ScenarioDef[] = [
   {
     id: "cdmx_chapultepec",
     title: "Chapultepec Crossing",
-    category: "cctv",
+    category: "aerial",
     description:
       "Near-overhead drone view of a six-way Mexico City intersection. Showcases multi-agent trajectory forecasting from above with cars, taxis, and crossing pedestrians.",
     videoUrl: "/clips/cdmx_chapultepec.mp4",
@@ -117,7 +117,7 @@ export const SCENARIOS: ScenarioDef[] = [
   {
     id: "cdmx_cuauhtemoc",
     title: "Cuauhtémoc Junction",
-    category: "cctv",
+    category: "aerial",
     description:
       "Drone view of a Mexico City avenue intersection. Tests intent prediction under heavier traffic — anticipate which lane a vehicle will commit to.",
     videoUrl: "/clips/cdmx_cuauhtemoc.mp4",
@@ -202,7 +202,7 @@ export const SCENARIOS: ScenarioDef[] = [
   {
     id: "manhattan_drone",
     title: "Midtown Flyover",
-    category: "cctv",
+    category: "aerial",
     description:
       "Drone glide over Midtown Manhattan rooftops at altitude. Vehicles read as pixel agents at a few meters wide — stress-tests small-object tracking at long range.",
     videoUrl: "/clips/manhattan_drone.mp4",
@@ -219,7 +219,7 @@ export const SCENARIOS: ScenarioDef[] = [
   {
     id: "akureyri_drone",
     title: "Akureyri Approach",
-    category: "cctv",
+    category: "aerial",
     description:
       "Drone approach over Akureyri, Iceland's northern capital — small-city aerial with sparse traffic, fjord coastline, and harbour cranes. Contrast to dense-city aerials.",
     videoUrl: "/clips/akureyri_drone.mp4",
