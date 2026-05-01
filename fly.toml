@@ -15,6 +15,10 @@ primary_region = "sin"
 [build]
   dockerfile = "Dockerfile"
 
+[deploy]
+  # Apply pending SQL migrations before traffic flips to new machines.
+  release_command = "node scripts/migrate.mjs"
+
 [env]
   NODE_ENV = "production"
   NEXT_TELEMETRY_DISABLED = "1"

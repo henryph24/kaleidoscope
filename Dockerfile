@@ -34,6 +34,12 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
+# Migration runner + SQL files — invoked as Fly's release_command.
+# `postgres` resolves from /app/node_modules (bundled by the standalone output
+# because src/db/index.ts imports it).
+COPY --from=builder --chown=nextjs:nodejs /app/scripts ./scripts
+COPY --from=builder --chown=nextjs:nodejs /app/src/db/migrations ./src/db/migrations
+
 USER nextjs
 EXPOSE 3000
 CMD ["node", "server.js"]
